@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"log"
 	database "rahulvarma07/github.com/DATABASE"
 	helpers "rahulvarma07/github.com/HELPERS"
@@ -14,7 +15,7 @@ import (
 var UserMongoCollection *mongo.Collection = database.CreateMongoCollection(database.GetMongoCLient(), "UserData")
 
 // Login func checking for the user...
-func LoginTheUser(ref *models.LoginModel) models.Response {
+func LoginTheUser(ref *models.LoginModel) (models.Response, error) {
 
 	var finalResponse models.Response // Response type to be returned
 
@@ -34,7 +35,7 @@ func LoginTheUser(ref *models.LoginModel) models.Response {
 	if err != nil {
 		finalResponse.Status = "UserSideBadStatus"
 		finalResponse.Message = "User does not exsits in database"
-		return finalResponse
+		return finalResponse, err
 	}
 
 	// If there's a user
@@ -42,23 +43,23 @@ func LoginTheUser(ref *models.LoginModel) models.Response {
 	if !isPasswordMatching {
 		finalResponse.Status = "UserSideBadStatus"
 		finalResponse.Message = "Enter Valid Password!"
-		return finalResponse
+		return finalResponse, errors.New("inValid Password")
 	}
 
 	token, err := helpers.GenerateToken(ref)
 	if err != nil {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to generate a token"
-		return finalResponse
+		return finalResponse, errors.New("unable to generate a token")
 	} else {
 		finalResponse.Status = "SuccesState"
 		finalResponse.Message = "Logined The User Successfully"
 		finalResponse.TokenString = token
 	}
-	return finalResponse
+	return finalResponse, nil
 }
 
-func SignUpTheUser(ref *models.LoginModel) models.Response {
+func SignUpTheUser(ref *models.LoginModel) (models.Response, error) {
 	var finalResponse models.Response
 
 	// first check whether the mail is present
@@ -72,7 +73,7 @@ func SignUpTheUser(ref *models.LoginModel) models.Response {
 	if isUserExsist == nil {
 		finalResponse.Status = "UserSideBadResponse"
 		finalResponse.Message = "User Email Already Exsists"
-		return finalResponse
+		return finalResponse, errors.New("user already exsists")
 	}
 
 	// if it's not
@@ -80,7 +81,7 @@ func SignUpTheUser(ref *models.LoginModel) models.Response {
 	if err != nil {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to hash the password"
-		return finalResponse
+		return finalResponse, err
 	}
 
 	ref.Password = hashUserEnteredPassword
@@ -90,7 +91,7 @@ func SignUpTheUser(ref *models.LoginModel) models.Response {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to add the user"
 		log.Println("unable to add the user with", addTheUser.InsertedID)
-		return finalResponse
+		return finalResponse, err
 	}
 
 	token, tokenErr := helpers.GenerateToken(ref)
@@ -98,11 +99,11 @@ func SignUpTheUser(ref *models.LoginModel) models.Response {
 	if tokenErr != nil {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to genereate the token"
-		return finalResponse
+		return finalResponse, err
 	} else {
 		finalResponse.Status = "Success"
 		finalResponse.Message = "Successfully Signed in the user"
 		finalResponse.TokenString = token
-		return finalResponse
+		return finalResponse, nil
 	}
 }
