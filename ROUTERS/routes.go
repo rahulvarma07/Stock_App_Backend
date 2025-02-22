@@ -7,6 +7,10 @@ import (
 	models "rahulvarma07/github.com/MODELS"
 )
 
+func HomePage(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode("Hello World")
+}
+
 func LoginTheUser(w http.ResponseWriter, r *http.Request) {
 
 	defer r.Body.Close() // Closing at the end
