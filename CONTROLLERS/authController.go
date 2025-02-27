@@ -3,16 +3,20 @@ package controllers
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+
 	database "rahulvarma07/github.com/DATABASE"
 	helpers "rahulvarma07/github.com/HELPERS"
 	models "rahulvarma07/github.com/MODELS"
+
+	"github.com/go-playground/validator"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-var UserMongoCollection *mongo.Collection = database.CreateMongoCollection(database.GetMongoCLient(), "UserData")
+var MongoClient = database.GetMongoCLient()
+var UserMongoCollection *mongo.Collection = database.CreateMongoCollection(MongoClient, "UserData")
 
 // Login func checking for the user...
 func LoginTheUser(ref *models.LoginModel) (models.Response, error) {
@@ -21,29 +25,39 @@ func LoginTheUser(ref *models.LoginModel) (models.Response, error) {
 
 	// check the user
 	// 1.Get the mail & Get the password
-	usreEnteredMail := ref.Email
-	userEnteredPassword := ref.Password
 
 	// if there is a user
-	validate := bson.M{"emial": usreEnteredMail} // Trying to find user entered mail
-	var ExsistingCredential struct {
-		Password string `json:"password"`
+	validate := bson.M{"email": ref.Email} // Trying to find user entered mail
+
+	// type of user model to retrive the data
+	type User struct {
+		Email    string `bson:"email"`
+		Password string `bson:"password"`
 	}
+
+	var ExsistingCredential User
+
 	err := UserMongoCollection.FindOne(context.Background(), validate).Decode(&ExsistingCredential)
 
-	// If There's no user..
-	if err != nil {
+	fmt.Println(ExsistingCredential)
+
+	if err == mongo.ErrNoDocuments { // Corrected error check
 		finalResponse.Status = "UserSideBadStatus"
-		finalResponse.Message = "User does not exsits in database"
+		finalResponse.Message = "User does not exist in database"
 		return finalResponse, err
 	}
 
-	// If there's a user
-	isPasswordMatching := helpers.CompareThePassword(ExsistingCredential.Password, userEnteredPassword)
+	// Debugging
+	fmt.Printf("Fetched User: %+v\n", ExsistingCredential)
+	fmt.Println("Retrieved Password:", ExsistingCredential.Password)
+
+	// If password is still empty, investigate MongoDB data
+
+	isPasswordMatching := helpers.CompareThePassword(ExsistingCredential.Password, ref.Password)
 	if !isPasswordMatching {
 		finalResponse.Status = "UserSideBadStatus"
 		finalResponse.Message = "Enter Valid Password!"
-		return finalResponse, errors.New("inValid Password")
+		return finalResponse, errors.New("invalid password")
 	}
 
 	token, err := helpers.GenerateToken(ref)
@@ -62,22 +76,28 @@ func LoginTheUser(ref *models.LoginModel) (models.Response, error) {
 func SignUpTheUser(ref *models.LoginModel) (models.Response, error) {
 	var finalResponse models.Response
 
-	// first check whether the mail is present
-	userEnteredEmail := ref.Email
-	userEnteredPassword := ref.Password
+	validate := validator.New()
+	checkValidation := validate.Struct(ref)
 
-	findUserWithEmail := bson.M{"email": userEnteredEmail}
+	if checkValidation != nil {
+		finalResponse.Status = "UserSideBadResponse"
+		finalResponse.Message = "Invalid mail"
+		return finalResponse, errors.New("invalid cred")
+	}
+	// first check whether the mail is present
+
+	findUserWithEmail := bson.M{"email": ref.Email}
 	isUserExsist := UserMongoCollection.FindOne(context.Background(), findUserWithEmail)
 
 	// if it is
-	if isUserExsist == nil {
+	if isUserExsist.Err() != mongo.ErrNoDocuments {
 		finalResponse.Status = "UserSideBadResponse"
 		finalResponse.Message = "User Email Already Exsists"
 		return finalResponse, errors.New("user already exsists")
 	}
 
 	// if it's not
-	hashUserEnteredPassword, err := helpers.HashThePassword(userEnteredPassword)
+	hashUserEnteredPassword, err := helpers.HashThePassword(ref.Password)
 	if err != nil {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to hash the password"
@@ -87,10 +107,11 @@ func SignUpTheUser(ref *models.LoginModel) (models.Response, error) {
 	ref.Password = hashUserEnteredPassword
 
 	addTheUser, err := UserMongoCollection.InsertOne(context.Background(), ref)
+	print(addTheUser)
+
 	if err != nil {
 		finalResponse.Status = "ServerSideBadResponse"
 		finalResponse.Message = "Unable to add the user"
-		log.Println("unable to add the user with", addTheUser.InsertedID)
 		return finalResponse, err
 	}
 

@@ -32,14 +32,14 @@ func LoginTheUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func SignUpTheUser(w http.ResponseWriter, r *http.Request) {
-
+	w.Header().Add("Content-Type", "application/json")
 	defer r.Body.Close() // Closing the body
 
-	var userEnteredAuthModel models.LoginModel
+	var userEnteredAuthModel *models.LoginModel
 
 	json.NewDecoder(r.Body).Decode(&userEnteredAuthModel) // Decoding the user entered model
 
-	response, err := controllers.SignUpTheUser(&userEnteredAuthModel)
+	response, err := controllers.SignUpTheUser(userEnteredAuthModel)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
